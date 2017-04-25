@@ -1,5 +1,10 @@
 class SwitchUserController < ApplicationController
-  before_action :developer_modes_only, :switch_back
+  # use :before_action instead of deprecated before_filter
+  if respond_to? :before_action
+    before_action :developer_modes_only, :switch_back
+  else
+    before_filter :developer_modes_only, :switch_back
+  end
 
   def set_current_user
     handle_request(params)
