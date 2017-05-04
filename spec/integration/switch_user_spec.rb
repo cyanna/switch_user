@@ -1,57 +1,82 @@
 require 'spec_helper'
 
-describe "Using SwitchUser", :type => :request do
-  let(:user) { User.create!(:email => "foo@bar.com", :admin => true) }
-  let(:other_user) { User.create!(:email => "other@bar.com", :admin => false) }
+RSpec.describe "Using SwitchUser", type: :request do
+  let(:user) { User.create!(email: "foo@bar.com", admin: true) }
+  let(:other_user) { User.create!(email: "other@bar.com", admin: false) }
+
   before do
     SwitchUser.reset_config
     SwitchUser.provider = :session
-    SwitchUser.controller_guard = lambda { |current_user, request| Rails.env.test? }
-    SwitchUser.redirect_path = lambda {|_,_| "/dummys/open"}
+    SwitchUser.controller_guard = ->(current_user, request) { Rails.env.test? }
+    SwitchUser.redirect_path = ->(_,_) { "/dummy/open" }
   end
+
   it "signs a user in using switch_user" do
     # can't access protected url
     get "/dummy/protected"
-    response.should be_redirect
+    expect(response).to be_redirect
 
     get "/switch_user?scope_identifier=user_#{other_user.id}"
-    response.should be_redirect
+    expect(response).to be_redirect
 
     # now that we are logged in via switch_user we can access
     get "/dummy/protected"
-    response.should be_success
+    expect(response).to be_success
   end
+
   context "using switch_back" do
     before do
       SwitchUser.switch_back = true
-      SwitchUser.controller_guard = lambda { |current_user, request, original_user|
-        current_user && current_user.admin? || original_user && original_user.admin?
-      }
+      SwitchUser.controller_guard = ->(current_user, request, original_user) { current_user && current_user.admin? || original_user && original_user.admin? }
     end
-    it "can switch back to a different user" do
+
+    it "can switch back to a different user through remember_user endpoint" do
+      # login
+      post "/login", id: user.id
+      follow_redirect!
+
+      # have SwitchUser remember us
+      get "/switch_user/remember_user", remember: true
+      expect(session["original_user_scope_identifier"]).to be_present
+
+      # check that we can switch to another user
+      get "/switch_user?scope_identifier=user_#{other_user.id}"
+      expect(session["user_id"]).to eq other_user.id
+
+      # logout
+      get "/logout"
+      expect(session["user_id"]).to be_nil
+
+      # check that we can still switch to another user
+      get "/switch_user?scope_identifier=user_#{user.id}"
+      expect(session["user_id"]).to eq user.id
+
+      # check that we can be un-remembered
+      get "/switch_user/remember_user", remember: false
+      expect(session["original_user"]).to be_nil
+    end
+
+    it "can switch back to a different user without hitting remember_user endpoint" do
       # login
       post "/login", :id => user.id
       follow_redirect!
 
-      # have SwitchUser remember us
-      get "/switch_user/remember_user", :remember => true
-      session["original_user_scope_identifier"].should be_present
-
       # check that we can switch to another user
-      get "/switch_user?scope_identifier=user_#{other_user.id}"
-      session["user_id"].should == other_user.id
+      get "/switch_user?scope_identifier=user_#{other_user.id}", :remember => true
+      expect(session["user_id"]).to eq other_user.id
+      expect(session["original_user_scope_identifier"]).to_not be_nil
 
       # logout
       get "/logout"
-      session["user_id"].should be_nil
+      expect(session["user_id"]).to be_nil
 
       # check that we can still switch to another user
       get "/switch_user?scope_identifier=user_#{user.id}"
-      session["user_id"].should == user.id
+      expect(session["user_id"]).to eq user.id
 
       # check that we can be un-remembered
       get "/switch_user/remember_user", :remember => false
-      session["original_user"].should be_nil
+      expect(session["original_user"]).to be_nil
     end
   end
 end

@@ -5,7 +5,7 @@ require 'switch_user/rails'
 
 class ApplicationController < ActionController::Base
   def require_user
-    current_user || redirect_to("/tests/open")
+    current_user || redirect_to("/dummy/open")
   end
 
   def current_user
@@ -16,27 +16,29 @@ class ApplicationController < ActionController::Base
     user = User.find(params[:id])
     session[SwitchUser.session_key] = user.id
 
-    redirect_to("/tests/protected")
+    redirect_to("/dummy/protected")
   end
 
   def logout
     session[SwitchUser.session_key] = nil
+
+    redirect_to("/dummy/open")
   end
 end
 
 class DummyController < ApplicationController
-  before_filter :require_user, :only => :protected
+  before_action :require_user, only: :protected
 
   def authenticated
-    render :text => current_user.inspect
+    render text: current_user.inspect
   end
 
   def open
-    render :text => view_context.switch_user_select
+    render text: view_context.switch_user_select
   end
 
   def protected
-    render :text => view_context.switch_user_select
+    render text: view_context.switch_user_select
   end
 end
 
@@ -46,17 +48,20 @@ module MyApp
     config.secret_key_base = "abc123"
     config.eager_load = true
     config.secret_token = '153572e559247c7aedd1bca5a246874d'
+
+    # should set it
+    config.action_dispatch.show_exceptions = false
   end
 end
 Rails.application.initialize!
 Rails.application.routes.draw do
-  get 'dummy/protected', :to => "dummy#protected"
-  get 'dummy/open', :to => "dummy#open"
-  post 'login', :to => "dummy#login"
-  get 'logout', :to => "dummy#logout"
-  get 'authenticated', :to => "dummy#authenticated"
-  get :switch_user, :to => 'switch_user#set_current_user'
-  get 'switch_user/remember_user', :to => 'switch_user#remember_user'
+  get 'dummy/protected', to: "dummy#protected"
+  get 'dummy/open', to: "dummy#open"
+  post 'login', to: "dummy#login"
+  get 'logout', to: "dummy#logout"
+  get 'authenticated', to: "dummy#authenticated"
+  get :switch_user, to: 'switch_user#set_current_user'
+  get 'switch_user/remember_user', to: 'switch_user#remember_user'
 end
 
 connection = ActiveRecord::Base.connection
@@ -66,4 +71,11 @@ connection.create_table :users do |t|
 end
 
 class User < ActiveRecord::Base
+end
+
+connection.create_table :clients do |t|
+  t.column :email, :string
+end
+
+class Client < ActiveRecord::Base
 end

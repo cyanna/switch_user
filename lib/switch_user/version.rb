@@ -1,3 +1,3 @@
 module SwitchUser
-  VERSION = "0.9.5.1"
+  VERSION = "1.4.0.1"
 end

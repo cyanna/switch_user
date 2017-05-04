@@ -1,18 +1,33 @@
 module SwitchUserHelper
   SelectOption = Struct.new(:label, :scope_id)
-  def switch_user_select
+  def switch_user_select(options = {})
     return unless available?
 
-    if provider.current_user
-      selected_user = "user_#{current_user.id}"
-    else
-      selected_user = nil
+    selected_user = nil
+
+    grouped_options_container = {}.tap do |h|
+      SwitchUser.all_users.each do |record|
+        scope = record.is_a?(SwitchUser::GuestRecord) ? :Guest : record.scope.to_s.capitalize
+        h[scope] ||= []
+        h[scope] << [record.label, record.scope_id]
+
+        if selected_user.nil?
+          unless record.is_a?(SwitchUser::GuestRecord)
+            if provider.current_user?(record.user, record.scope)
+              selected_user = record.scope_id
+            end
+          end
+        end
+      end
     end
 
-    render :partial => "switch_user/widget",
-           :locals => {
-             :options => SwitchUser.all_users,
-             :current_scope => selected_user
+    option_tags = grouped_options_for_select(grouped_options_container.to_a, selected_user)
+
+    render partial: "switch_user/widget",
+           locals: {
+             option_tags: option_tags,
+             classes: options[:class],
+             styles: options[:style],
            }
   end
 
